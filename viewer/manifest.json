@@ -1,0 +1,10 @@
+{
+  "id": "iuno-mention",
+  "name": "QQ 提醒",
+  "version": "0.1.0",
+  "api": 1,
+  "needs_level": 7,
+  "uses": ["mailbox"],
+  "backend": "backend.py",
+  "frontend": "frontend.js"
+}

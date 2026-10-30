@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+"""iuno-mention 中转（remote 上，iuno-mention 用户的 SSH 强制命令，第一个参数是客户端的名字）。
+
+协议见 docs/protocol.md：一行一个 JSON。只传话：客户端发的放进 to_qq/，主人的回复从 from_qq/<客户端>/ 转回去。
+名字由强制命令给，客户端自己改不了。同一个客户端同一时间只留最新的一条连接。"""
+import json
+import os
+import re
+import sys
+import threading
+import time
+import uuid
+
+PROTO = 1
+SPOOL = os.environ.get("IUNO_MENTION_SPOOL", "/var/lib/iuno-mention")
+TEXT_MAX = 2000
+CLIENT_RE = re.compile(r"[a-z0-9][a-z0-9-]{0,39}")
+
+
+def write_atomic(path, text):
+    tmp = os.path.join(os.path.dirname(path), "." + os.path.basename(path) + ".tmp" + uuid.uuid4().hex[:6])
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(text)
+    os.replace(tmp, path)
+
+
+def say(obj):
+    with lock:
+        sys.stdout.write(json.dumps(obj, ensure_ascii=False) + "\n")
+        sys.stdout.flush()
+
+
+def paused():
+    try:
+        with open(os.path.join(SPOOL, "paused.json"), encoding="utf-8") as f:
+            return float(json.load(f) or 0) > time.time()
+    except (OSError, ValueError, TypeError):
+        return False
+
+
+def reader(client):
+    for line in sys.stdin:
+        try:
+            msg = json.loads(line)
+        except ValueError:
+            continue
+        if not (isinstance(msg, dict) and msg.get("op") == "send" and isinstance(msg.get("text"), str)):
+            continue
+        if paused():
+            say({"op": "ack", "id": msg.get("id"), "status": "paused"})
+            continue
+        row = {"client": client, "id": msg.get("id"), "title": str(msg.get("title") or "")[:60], "text": msg["text"][:TEXT_MAX],
+               "urgent": bool(msg.get("urgent")), "link": str(msg.get("link") or "")[:300]}
+        write_atomic(os.path.join(SPOOL, "to_qq", f"{time.time_ns()}-{uuid.uuid4().hex[:8]}.json"), json.dumps(row, ensure_ascii=False))
+        say({"op": "ack", "id": msg.get("id"), "status": "queued"})
+    os._exit(0)  # 那边断开了
+
+
+lock = threading.Lock()
+
+
+def main():
+    client = sys.argv[1] if len(sys.argv) > 1 else ""
+    if not CLIENT_RE.fullmatch(client):
+        print(json.dumps({"op": "error", "why": "这把钥匙没登记客户端名字"}), flush=True)
+        return 1
+    os.umask(0o007)
+    try:
+        hello = json.loads(sys.stdin.readline() or "{}")
+    except ValueError:
+        hello = {}
+    if hello.get("op") != "hello" or hello.get("proto") != PROTO:
+        print(json.dumps({"op": "error", "why": f"协议版本对不上：这边是 {PROTO}"}), flush=True)
+        return 1
+    me, inbox = str(os.getpid()), os.path.join(SPOOL, "from_qq", client)
+    os.makedirs(inbox, mode=0o2770, exist_ok=True)
+    os.makedirs(os.path.join(SPOOL, "owners"), mode=0o2770, exist_ok=True)
+    os.makedirs(os.path.join(SPOOL, "alive"), mode=0o2770, exist_ok=True)
+    owner, alive = os.path.join(SPOOL, "owners", client), os.path.join(SPOOL, "alive", client)
+    write_atomic(owner, me)
+    say({"op": "hello", "proto": PROTO, "client": client})
+    threading.Thread(target=reader, args=(client,), daemon=True).start()
+    beat = 0.0
+    while True:
+        try:
+            with open(owner) as f:
+                if f.read().strip() != me:
+                    return 0  # 客户端重连了，旧连接让位
+        except OSError:
+            return 0
+        now = time.time()
+        if now - beat >= 5:
+            write_atomic(alive, str(now))
+            say({"op": "alive", "paused": paused()})
+            beat = now
+        for name in sorted(os.listdir(inbox)):
+            if name.startswith(".") or not name.endswith(".json"):
+                continue
+            path = os.path.join(inbox, name)
+            try:
+                with open(path, encoding="utf-8") as f:
+                    data = json.load(f)
+            except (OSError, ValueError):
+                data = None
+            if isinstance(data, dict):
+                say({"op": "reply", **{k: data.get(k) for k in ("id", "text", "at", "from")}})
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+        time.sleep(0.5)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

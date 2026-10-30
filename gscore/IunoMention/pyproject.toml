@@ -1,0 +1,5 @@
+[project]
+name = "iuno-mention"
+version = "0.1.0"
+description = "查看器的会话经信箱给主人发 QQ 提醒：这里只传话，把关在查看器那边"
+dependencies = []

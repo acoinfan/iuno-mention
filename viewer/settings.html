@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+  body { margin: 0; padding: 12px 14px; font: 14px/1.6 "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; color: #1f2328; }
+  label { display: flex; gap: 8px; align-items: center; margin: 4px 0; flex-wrap: wrap; }
+  input[type=text], input[type=number] { padding: 2px 6px; border: 1px solid #e3e5e8; border-radius: 6px; font: inherit; }
+  input[type=number] { width: 5em; }
+  button { padding: 3px 10px; border: 1px solid #e3e5e8; border-radius: 6px; background: #fff; cursor: pointer; font: inherit; font-size: 13px; }
+  .muted { color: #6b7280; font-size: 12px; }
+  .err { color: #b42318; font-size: 13px; }
+  .ok { color: #3b915d; }
+  code { display: block; background: #f6f7f9; padding: 6px 8px; border-radius: 6px; font-size: 12px; word-break: break-all; user-select: all; }
+  h4 { margin: 12px 0 4px; font-size: 13px; }
+  li { font-size: 12px; margin: 2px 0; }
+  ul { padding-left: 16px; margin: 4px 0; }
+</style>
+</head>
+<body>
+<p id="state" class="muted">正在读…</p>
+<p id="err" class="err"></p>
+<label><input type="checkbox" id="on">打开 QQ 提醒（收件人写「名字@qq」的信发到你的 QQ）</label>
+<h4>连接</h4>
+<label>地址 <input type="text" id="remote" size="26" placeholder="iuno-mention@你的服务器"> 端口 <input type="number" id="port"></label>
+<div id="keybox"></div>
+<h4>把关</h4>
+<label>静默时段 <input type="text" id="quiet" size="12" placeholder="00:30-08:30"><span class="muted">这段时间信存着，过了每个会话合成一条；标了「要马上看」的照发</span></label>
+<label>每个会话每小时 <input type="number" id="per_session"> 条，全部每小时 <input type="number" id="per_all"> 条</label>
+<label>静默时段里紧急的一晚最多 <input type="number" id="urgent_per_night"> 条，相同内容 <input type="number" id="dedupe_min"> 分钟内不重发</label>
+<label>正文最多 <input type="number" id="text_max"> 字</label>
+<label>消息末尾的链接 <input type="text" id="link" size="26" placeholder="可不填"></label>
+<p><button id="save">保存</button> <button id="test">发一条测试</button></p>
+<h4>最近的记录</h4>
+<ul id="log"></ul>
+<script src="settings.js"></script>
+</body>
+</html>
